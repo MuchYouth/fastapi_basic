@@ -4,6 +4,7 @@ from fastapi import Depends
 from database.connection import get_db
 from sqlalchemy.orm import Session
 from database.orm import ToDo
+from src.database.orm import User
 
 class ToDoRepository:
     def __init__(self, session: Session = Depends(get_db)):
@@ -35,3 +36,13 @@ class ToDoRepository:
         self.session.execute(delete(ToDo).where(ToDo.id == todo_id)) # delete는 sqlalchemy의 내장함수
         # autocommit을 false로 지정해줬기 때문에 데이터 변경이후에는 반드시 commit 함수 수행해야한다.
         self.session.commit()
+
+class UserRepository:
+    def __init__(self, session: Session = Depends(get_db)):
+        self.session = session
+
+    def save_user(self, user: User) -> User:
+        self.session.add(instance=user)
+        self.session.commit()
+        self.session.refresh(instance=user)
+        return user
