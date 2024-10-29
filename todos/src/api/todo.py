@@ -4,9 +4,12 @@ from fastapi import Depends, HTTPException, Body, APIRouter
 from sqlalchemy.orm import Session
 from src.database.connection import get_db
 from src.database.orm import ToDo
-from src.database.repository import ToDoRepository
+from src.database.repository import ToDoRepository, UserRepository
 from src.schema.request import CreateToDoRequest
 from src.schema.response import ToDoListSchema, ToDoSchema
+from src.security import get_access_token
+from src.service.user import UserService
+from src.database.orm import User
 
 # 조회를 하는 부분 : database에서 데이터 조회 -> orm 객체를 불러옴 -> orm 객체를 리턴해주는 부분에서 pydantic에 맞게 변환
 # 생성을 하는 부분 : pydantic으로 들어온 데이터 -> orm으로 변환 -> database에 저장
@@ -16,11 +19,24 @@ router = APIRouter(prefix="/todos")
 @router.get("", status_code=200)
 # fastapi 에서 파라미터 전달 방법 (함 수
 def get_todos_handler(
+        # 이 핸들러가 호출 될때마다 get access token이라는 함수가 호출될 것이다.
+        # 해당 함수에 보면 헤더에서 액세스 토큰이 있나 검증
+        access_token:str = Depends(get_access_token),
         order:str | None = None,
-        todo_repo: ToDoRepository = Depends(),
+        user_service: UserService = Depends(),
+        user_repo: UserRepository = Depends(),
 ) -> ToDoListSchema:
+
+    # (토큰 설정 이후) 이제는 todos에서 직접 조회하는 것이 아니라, 토큰을 통해 받아온 username을 통해서 조회를 하려고 한다.
+    username: str = user_service.decode_jwt(access_token=access_token)
+    # 토큰에서 받아온 사용자 이름을 통해서 user repo에서 user 받아오기
+    user: User | None = user_repo.get_user_by_username(username=username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
     # 데이터를 조회하는 부분은 따로 파일로 관리 (레포지토리 패턴)
-    todos:List[ToDo] = todo_repo.get_todos()
+    todos:List[ToDo] = user.todos # (토큰설정이후) 사용자를 확인한 후에 사용자의 todos 를 가져온다.
+    # eager loading 으로 사용자 조회 시점에 이미 todos 목록까지 가져오고 있음
     if order and order == "DESC":
         return ToDoListSchema(
             todos=[ToDoSchema.from_orm(todo) for todo in todos[::-1]]

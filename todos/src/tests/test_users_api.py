@@ -37,3 +37,4 @@ def test_user_sign_up(client, mocker):
     )
     assert response.status_code == 201
     assert response.json() == {"id": 1, "username": "test"}
+
